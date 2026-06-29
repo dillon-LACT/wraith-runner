@@ -51,11 +51,11 @@ SLACK_WEBHOOK=$SlackWebhook
             Remove-Item $zipPath
 
             # Write .env
-            $envFileContent | Set-Content "$installPath\.env" -Encoding UTF8
+            $envFileContent | Set-Content "$installPath\runner\.env" -Encoding UTF8
 
             # pip install
             Write-Host "Installing Python dependencies..."
-            & python -m pip install -r "$installPath\requirements.txt" --quiet
+            & python -m pip install -r "$installPath\runner\requirements.txt" --quiet
 
             # NSSM
             if (-not (Test-Path $nssmPath)) {
@@ -80,7 +80,7 @@ SLACK_WEBHOOK=$SlackWebhook
             # Register + start service
             $pythonExe = (Get-Command python).Source
             & $nssmPath install $ServiceName $pythonExe "worker.py"
-            & $nssmPath set     $ServiceName AppDirectory   $installPath
+            & $nssmPath set     $ServiceName AppDirectory   "$installPath\runner"
             & $nssmPath set     $ServiceName DisplayName    "Onboarding Runner"
             & $nssmPath set     $ServiceName Description    "AI-powered app sign-in automation worker"
             & $nssmPath set     $ServiceName Start          SERVICE_AUTO_START
