@@ -1,18 +1,23 @@
 # ImmyBot Task: Onboard User (Metascript — runs server-side, no Invoke-ImmyCommand needed)
 #
 # Task Parameters to define in ImmyBot UI:
-#   $ApiUrl         - Central API URL
-#   $TenantApiKey   - Tenant API key (ten_...)
-#   $DeviceId       - Device identifier (use $env:COMPUTERNAME or set manually)
-#   $Client         - Customer/client name (e.g. "Acme Corp")
-#   $UserEmail      - User being onboarded (e.g. jane@acme.com)
-#   $Apps           - Comma-separated apps (e.g. "zoom,teams")
-#   $SignInMethod   - "sso", "user_pass", or "skip"
-#   $Username       - (optional) username for user_pass
-#   $Password       - (optional) password for user_pass
-#   $SsoDomain      - (optional) SSO domain slug for sso method
-#   $SlackWebhook   - (optional) override Slack webhook for this job
-#   $TimeoutSeconds - (optional) seconds to wait per job, default 300
+#   $ApiUrl           - Central API URL
+#   $TenantApiKey     - Tenant API key (ten_...)
+#   $DeviceId         - Device identifier (use $env:COMPUTERNAME or set manually)
+#   $Client           - Customer/client name (e.g. "Acme Corp")
+#   $UserEmail        - User being onboarded (e.g. jane@acme.com)
+#   $Apps             - Comma-separated apps (e.g. "zoom,teams")
+#   $SignInMethod     - "sso", "user_pass", or "skip"
+#   $Username         - (optional) username for user_pass
+#   $Password         - (optional) password for user_pass
+#   $SsoDomain        - (optional) SSO domain slug for sso method
+#   $SlackWebhook     - (optional) override Slack webhook for this job
+#   $TimeoutSeconds   - (optional) seconds to wait per job, default 300
+#
+# Installer Parameters (also defined here so ImmyBot surfaces them in the deployment UI):
+#   $DeviceApiKey     - Device-specific API key (dev_...) used by install-runner.ps1
+#   $AnthropicApiKey  - Anthropic API key for Claude used by install-runner.ps1
+#   $RunnerPackageUrl - URL to runner .zip used by install-runner.ps1
 
 if (-not $TimeoutSeconds) { $TimeoutSeconds = 300 }
 
