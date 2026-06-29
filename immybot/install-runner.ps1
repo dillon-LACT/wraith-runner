@@ -106,4 +106,11 @@ $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc.Status -ne "Running") {
     throw "OnboardingRunner failed to start. Check $installPath\logs\service.log"
 }
+
+# ── Write version to registry for ImmyBot detection ───────────────────────────
+$regPath = "HKLM:\SOFTWARE\WraithRunner"
+New-Item -Path $regPath -Force | Out-Null
+Set-ItemProperty -Path $regPath -Name "Version" -Value "1.0.0"
+Set-ItemProperty -Path $regPath -Name "InstallPath" -Value $installPath
+
 Write-Host "Onboarding Runner is running."
