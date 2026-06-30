@@ -52,7 +52,6 @@ function Invoke-Download {
 # ── Directories ────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
 New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
-New-Item -ItemType Directory -Force -Path $pythonDir          | Out-Null
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 if (-not (Test-Path $pythonExe)) {
