@@ -100,11 +100,11 @@ Write-Host "Installing Python dependencies..."
 $pipArgs = @(
     "-m", "pip", "install",
     "-r", "$installPath\runner\requirements.txt",
-    "--timeout", "60",
+    "--timeout", "30",
+    "--retries", "1",
     "--trusted-host", "pypi.org",
     "--trusted-host", "pypi.python.org",
-    "--trusted-host", "files.pythonhosted.org",
-    "--quiet"
+    "--trusted-host", "files.pythonhosted.org"
 )
 $pipSuccess = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
