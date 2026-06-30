@@ -34,20 +34,23 @@ $nssmPath    = "C:\ProgramData\nssm\nssm.exe"
 $pythonDir   = "C:\ProgramData\OnboardingRunner\python"
 $pythonExe   = "$pythonDir\python.exe"
 
+# ── Directories ────────────────────────────────────────────────────────────────
+New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
+New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
+New-Item -ItemType Directory -Force -Path $pythonDir          | Out-Null
+
 # ── Python ─────────────────────────────────────────────────────────────────────
 if (-not (Test-Path $pythonExe)) {
     Write-Host "Installing Python..."
     $pythonInstaller = "$env:TEMP\python-installer.exe"
     Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
-    & $pythonInstaller /quiet TargetDir=$pythonDir InstallAllUsers=0 PrependPath=0 Include_test=0
+    & $pythonInstaller /quiet "TargetDir=$pythonDir" InstallAllUsers=0 PrependPath=0 Include_test=0
+    $exitCode = $LASTEXITCODE
     try { Remove-Item $pythonInstaller -Force } catch {}
+    if ($exitCode -ne 0) { throw "Python installer exited with code $exitCode." }
 }
 if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
-
-# ── Directories ────────────────────────────────────────────────────────────────
-New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
-New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
 
 # ── Download + extract runner package ─────────────────────────────────────────
 Write-Host "Downloading runner package..."
