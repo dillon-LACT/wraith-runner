@@ -84,9 +84,19 @@ if (-not $pythonOk) {
     Write-Host "Bootstrapping pip..."
     $getPip = "$env:TEMP\get-pip.py"
     Invoke-Download -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
-    & $pythonExe $getPip --no-warn-script-location
-    if ($LASTEXITCODE -ne 0) { throw "pip bootstrap failed." }
-    Remove-Item $getPip -Force
+    $getPipArgs = @("--no-warn-script-location",
+        "--trusted-host", "pypi.org",
+        "--trusted-host", "pypi.python.org",
+        "--trusted-host", "files.pythonhosted.org")
+    $bootstrapOk = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Write-Host "pip bootstrap attempt $attempt of 3..."
+        & $pythonExe $getPip @getPipArgs
+        if ($LASTEXITCODE -eq 0) { $bootstrapOk = $true; break }
+        if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
+    }
+    Remove-Item $getPip -Force -ErrorAction SilentlyContinue
+    if (-not $bootstrapOk) { throw "pip bootstrap failed after 3 attempts." }
 }
 if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
