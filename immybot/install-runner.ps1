@@ -28,11 +28,26 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ServiceName = "OnboardingRunner"
 $installPath = "C:\ProgramData\OnboardingRunner"
 $nssmPath    = "C:\ProgramData\nssm\nssm.exe"
 $pythonDir   = "C:\ProgramData\OnboardingRunner\python"
 $pythonExe   = "$pythonDir\python.exe"
+
+function Invoke-Download {
+    param([string]$Uri, [string]$OutFile)
+    for ($i = 1; $i -le 3; $i++) {
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+            return
+        } catch {
+            if ($i -eq 3) { throw }
+            Write-Host "Download failed (attempt $i/3), retrying in 5s..."
+            Start-Sleep -Seconds 5
+        }
+    }
+}
 
 # ── Directories ────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
@@ -43,7 +58,7 @@ New-Item -ItemType Directory -Force -Path $pythonDir          | Out-Null
 if (-not (Test-Path $pythonExe)) {
     Write-Host "Installing Python..."
     $pythonInstaller = "$env:TEMP\python-installer.exe"
-    Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
+    Invoke-Download -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller
     $proc = Start-Process -FilePath $pythonInstaller `
         -ArgumentList "/quiet", "TargetDir=$pythonDir", "InstallAllUsers=1", "PrependPath=0", "Include_test=0" `
         -Wait -PassThru
@@ -63,7 +78,7 @@ Write-Host "Using Python: $pythonExe"
 # ── Download + extract runner package ─────────────────────────────────────────
 Write-Host "Downloading runner package..."
 $zipPath = "$env:TEMP\onboarding-runner.zip"
-Invoke-WebRequest -Uri $RunnerPackageUrl -OutFile $zipPath -UseBasicParsing
+Invoke-Download -Uri $RunnerPackageUrl -OutFile $zipPath
 Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
 Remove-Item $zipPath
 
@@ -104,7 +119,7 @@ if (-not $pipSuccess) { throw "pip install failed after 3 attempts." }
 if (-not (Test-Path $nssmPath)) {
     Write-Host "Downloading NSSM..."
     $nssmZip = "$env:TEMP\nssm.zip"
-    Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $nssmZip -UseBasicParsing
+    Invoke-Download -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $nssmZip
     Expand-Archive -Path $nssmZip -DestinationPath "$env:TEMP\nssm-extract" -Force
     New-Item -ItemType Directory -Force -Path "C:\ProgramData\nssm" | Out-Null
     Copy-Item "$env:TEMP\nssm-extract\nssm-2.24\win64\nssm.exe" $nssmPath
