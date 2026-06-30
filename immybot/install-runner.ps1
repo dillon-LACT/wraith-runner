@@ -43,6 +43,19 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
                 [System.Environment]::GetEnvironmentVariable("Path","User")
 }
 
+# PATH may not reflect the install in this session — search common locations as fallback
+$pythonExe = (Get-Command python -ErrorAction SilentlyContinue)?.Source
+if (-not $pythonExe) {
+    $pythonExe = Get-ChildItem `
+        "$env:ProgramFiles\Python*\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe" `
+        -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -ExpandProperty FullName -First 1
+}
+if (-not $pythonExe) { throw "Python not found after install. Verify Python is installed and re-run." }
+Write-Host "Using Python: $pythonExe"
+
 # ── Directories ────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
 New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
@@ -69,7 +82,23 @@ SLACK_WEBHOOK=$SlackWebhook
 
 # ── pip install ────────────────────────────────────────────────────────────────
 Write-Host "Installing Python dependencies..."
-& python -m pip install -r "$installPath\runner\requirements.txt" --quiet
+$pipArgs = @(
+    "-m", "pip", "install",
+    "-r", "$installPath\runner\requirements.txt",
+    "--timeout", "60",
+    "--trusted-host", "pypi.org",
+    "--trusted-host", "pypi.python.org",
+    "--trusted-host", "files.pythonhosted.org",
+    "--quiet"
+)
+$pipSuccess = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+    Write-Host "pip install attempt $attempt of 3..."
+    & $pythonExe @pipArgs
+    if ($LASTEXITCODE -eq 0) { $pipSuccess = $true; break }
+    if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
+}
+if (-not $pipSuccess) { throw "pip install failed after 3 attempts." }
 
 # ── NSSM ───────────────────────────────────────────────────────────────────────
 if (-not (Test-Path $nssmPath)) {
@@ -92,7 +121,6 @@ if ($existingSvc) {
 }
 
 # ── Register + start service ───────────────────────────────────────────────────
-$pythonExe = (Get-Command python).Source
 & $nssmPath install $ServiceName $pythonExe "worker.py"
 & $nssmPath set     $ServiceName AppDirectory   "$installPath\runner"
 & $nssmPath set     $ServiceName DisplayName    "Onboarding Runner"
