@@ -44,10 +44,18 @@ if (-not (Test-Path $pythonExe)) {
     Write-Host "Installing Python..."
     $pythonInstaller = "$env:TEMP\python-installer.exe"
     Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
-    & $pythonInstaller /quiet "TargetDir=$pythonDir" InstallAllUsers=0 PrependPath=0 Include_test=0
-    $exitCode = $LASTEXITCODE
+    $proc = Start-Process -FilePath $pythonInstaller `
+        -ArgumentList "/quiet", "TargetDir=$pythonDir", "InstallAllUsers=0", "PrependPath=0", "Include_test=0" `
+        -Wait -PassThru
     try { Remove-Item $pythonInstaller -Force } catch {}
-    if ($exitCode -ne 0) { throw "Python installer exited with code $exitCode." }
+    if ($proc.ExitCode -ne 0) { throw "Python installer exited with code $($proc.ExitCode)." }
+
+    # Wait up to 60s for python.exe to appear in case of any post-install lag
+    $deadline = (Get-Date).AddSeconds(60)
+    while (-not (Test-Path $pythonExe) -and (Get-Date) -lt $deadline) {
+        Write-Host "Waiting for Python to finish installing..."
+        Start-Sleep -Seconds 3
+    }
 }
 if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
