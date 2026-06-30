@@ -35,7 +35,10 @@ $nssmPath    = "C:\ProgramData\nssm\nssm.exe"
 # ── Python ─────────────────────────────────────────────────────────────────────
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "Installing Python..."
-    winget install --id Python.Python.3.12 --silent --accept-source-agreements --accept-package-agreements
+    $pythonInstaller = "$env:TEMP\python-installer.exe"
+    Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
+    & $pythonInstaller /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
+    try { Remove-Item $pythonInstaller -Force } catch {}
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path","User")
 }
