@@ -55,12 +55,9 @@ New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
 Start-Transcript -Path "$installPath\logs\install.log" -Force | Out-Null
 
 # ── Python ─────────────────────────────────────────────────────────────────────
-# Validate existing install can actually load its stdlib
-$pythonOk = $false
-if (Test-Path $pythonExe) {
-    & $pythonExe -c "import sys" 2>$null
-    if ($LASTEXITCODE -eq 0) { $pythonOk = $true }
-}
+# Validate existing install: embeddable package has python312.zip (stdlib), full
+# install has Lib\. Running the broken exe to check hangs on fatal startup errors.
+$pythonOk = (Test-Path $pythonExe) -and ((Test-Path "$pythonDir\python312.zip") -or (Test-Path "$pythonDir\Lib"))
 if (-not $pythonOk) {
     # Use the embeddable package so python.exe + stdlib live in one directory.
     # The full MSI installer splits python.exe (TargetDir) from Lib/ (default
