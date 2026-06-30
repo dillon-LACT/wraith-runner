@@ -52,6 +52,7 @@ function Invoke-Download {
 # ── Directories ────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
 New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
+Start-Transcript -Path "$installPath\logs\install.log" -Force | Out-Null
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 if (-not (Test-Path $pythonExe)) {
@@ -112,7 +113,10 @@ for ($attempt = 1; $attempt -le 3; $attempt++) {
     if ($LASTEXITCODE -eq 0) { $pipSuccess = $true; break }
     if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
 }
-if (-not $pipSuccess) { throw "pip install failed after 3 attempts." }
+if (-not $pipSuccess) {
+    Write-Error "pip install failed after 3 attempts."
+    exit 1
+}
 
 # ── NSSM ───────────────────────────────────────────────────────────────────────
 if (-not (Test-Path $nssmPath)) {
