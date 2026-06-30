@@ -45,7 +45,7 @@ if (-not (Test-Path $pythonExe)) {
     $pythonInstaller = "$env:TEMP\python-installer.exe"
     Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
     $proc = Start-Process -FilePath $pythonInstaller `
-        -ArgumentList "/quiet", "TargetDir=$pythonDir", "InstallAllUsers=0", "PrependPath=0", "Include_test=0" `
+        -ArgumentList "/quiet", "TargetDir=$pythonDir", "InstallAllUsers=1", "PrependPath=0", "Include_test=0" `
         -Wait -PassThru
     try { Remove-Item $pythonInstaller -Force } catch {}
     if ($proc.ExitCode -ne 0) { throw "Python installer exited with code $($proc.ExitCode)." }
