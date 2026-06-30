@@ -74,8 +74,11 @@ if (-not $pythonOk) {
 
     # Embeddable Python disables site-packages by default; uncomment 'import site'
     # in the ._pth file so that pip and installed packages are discoverable.
+    # Edit ._pth without BOM — PS5.1 Set-Content -Encoding UTF8 adds a BOM which
+    # breaks Python's path parser (it prepends BOM bytes to "python312.zip").
     $pthFile = "$pythonDir\python312._pth"
-    (Get-Content $pthFile -Raw) -replace '#import site', 'import site' | Set-Content $pthFile -Encoding UTF8
+    $pthContent = [System.IO.File]::ReadAllText($pthFile) -replace '#import site', 'import site'
+    [System.IO.File]::WriteAllText($pthFile, $pthContent, [System.Text.Encoding]::ASCII)
 
     # Bootstrap pip (not bundled with the embeddable package)
     Write-Host "Bootstrapping pip..."
