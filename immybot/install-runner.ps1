@@ -31,29 +31,18 @@ $ErrorActionPreference = "Stop"
 $ServiceName = "OnboardingRunner"
 $installPath = "C:\ProgramData\OnboardingRunner"
 $nssmPath    = "C:\ProgramData\nssm\nssm.exe"
+$pythonDir   = "C:\ProgramData\OnboardingRunner\python"
+$pythonExe   = "$pythonDir\python.exe"
 
 # ── Python ─────────────────────────────────────────────────────────────────────
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+if (-not (Test-Path $pythonExe)) {
     Write-Host "Installing Python..."
     $pythonInstaller = "$env:TEMP\python-installer.exe"
     Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller -UseBasicParsing
-    & $pythonInstaller /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
+    & $pythonInstaller /quiet TargetDir=$pythonDir InstallAllUsers=0 PrependPath=0 Include_test=0
     try { Remove-Item $pythonInstaller -Force } catch {}
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("Path","User")
 }
-
-# PATH may not reflect the install in this session — search common locations as fallback
-$pythonExe = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-if (-not $pythonExe) {
-    $pythonExe = Get-ChildItem `
-        "$env:ProgramFiles\Python*\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe" `
-        -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending |
-        Select-Object -ExpandProperty FullName -First 1
-}
-if (-not $pythonExe) { throw "Python not found after install. Verify Python is installed and re-run." }
+if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
 
 # ── Directories ────────────────────────────────────────────────────────────────
