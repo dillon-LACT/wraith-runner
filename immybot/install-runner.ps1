@@ -84,10 +84,7 @@ if (-not $pythonOk) {
     Write-Host "Bootstrapping pip..."
     $getPip = "$env:TEMP\get-pip.py"
     Invoke-Download -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
-    $getPipArgs = @("--no-warn-script-location",
-        "--trusted-host", "pypi.org",
-        "--trusted-host", "pypi.python.org",
-        "--trusted-host", "files.pythonhosted.org")
+    $getPipArgs = @("--no-warn-script-location", "--no-index")
     $bootstrapOk = $false
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         Write-Host "pip bootstrap attempt $attempt of 3..."
