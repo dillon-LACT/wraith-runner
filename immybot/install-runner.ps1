@@ -55,22 +55,38 @@ New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
 Start-Transcript -Path "$installPath\logs\install.log" -Force | Out-Null
 
 # ── Python ─────────────────────────────────────────────────────────────────────
-if (-not (Test-Path $pythonExe)) {
-    Write-Host "Installing Python..."
-    $pythonInstaller = "$env:TEMP\python-installer.exe"
-    Invoke-Download -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe" -OutFile $pythonInstaller
-    $proc = Start-Process -FilePath $pythonInstaller `
-        -ArgumentList "/quiet", "TargetDir=$pythonDir", "InstallAllUsers=1", "PrependPath=0", "Include_test=0" `
-        -Wait -PassThru
-    try { Remove-Item $pythonInstaller -Force } catch {}
-    if ($proc.ExitCode -ne 0) { throw "Python installer exited with code $($proc.ExitCode)." }
+# Validate existing install can actually load its stdlib
+$pythonOk = $false
+if (Test-Path $pythonExe) {
+    & $pythonExe -c "import sys" 2>$null
+    if ($LASTEXITCODE -eq 0) { $pythonOk = $true }
+}
+if (-not $pythonOk) {
+    # Use the embeddable package so python.exe + stdlib live in one directory.
+    # The full MSI installer splits python.exe (TargetDir) from Lib/ (default
+    # system path) when another Python is already registered in HKLM, which
+    # makes the interpreter unable to find its own stdlib.
+    Write-Host "Installing Python embeddable package (removing old install if present)..."
+    if (Test-Path $pythonDir) { Remove-Item $pythonDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $pythonDir | Out-Null
 
-    # Wait up to 60s for python.exe to appear in case of any post-install lag
-    $deadline = (Get-Date).AddSeconds(60)
-    while (-not (Test-Path $pythonExe) -and (Get-Date) -lt $deadline) {
-        Write-Host "Waiting for Python to finish installing..."
-        Start-Sleep -Seconds 3
-    }
+    $pythonZip = "$env:TEMP\python-embed.zip"
+    Invoke-Download -Uri "https://www.python.org/ftp/python/3.12.9/python-3.12.9-embed-amd64.zip" -OutFile $pythonZip
+    Expand-Archive -Path $pythonZip -DestinationPath $pythonDir -Force
+    Remove-Item $pythonZip
+
+    # Embeddable Python disables site-packages by default; uncomment 'import site'
+    # in the ._pth file so that pip and installed packages are discoverable.
+    $pthFile = "$pythonDir\python312._pth"
+    (Get-Content $pthFile -Raw) -replace '#import site', 'import site' | Set-Content $pthFile -Encoding UTF8
+
+    # Bootstrap pip (not bundled with the embeddable package)
+    Write-Host "Bootstrapping pip..."
+    $getPip = "$env:TEMP\get-pip.py"
+    Invoke-Download -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
+    & $pythonExe $getPip --no-warn-script-location
+    if ($LASTEXITCODE -ne 0) { throw "pip bootstrap failed." }
+    Remove-Item $getPip -Force
 }
 if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
