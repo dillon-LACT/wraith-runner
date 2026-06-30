@@ -52,7 +52,7 @@ function Invoke-Download {
 # ── Directories ────────────────────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $installPath        | Out-Null
 New-Item -ItemType Directory -Force -Path "$installPath\logs" | Out-Null
-Start-Transcript -Path "$installPath\logs\install.log" -Force | Out-Null
+try { Start-Transcript -Path "$installPath\logs\install.log" -Force | Out-Null } catch {}
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 # Validate existing install: embeddable package has python312.zip (stdlib), full
