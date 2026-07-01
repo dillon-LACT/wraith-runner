@@ -79,55 +79,55 @@ if (-not $pythonOk) {
     $pthFile = "$pythonDir\python312._pth"
     $pthContent = [System.IO.File]::ReadAllText($pthFile) -replace '#import site', 'import site'
     [System.IO.File]::WriteAllText($pthFile, $pthContent, [System.Text.Encoding]::ASCII)
-
-    # Bootstrap pip (not bundled with the embeddable package)
-    Write-Host "Bootstrapping pip..."
-    $getPip = "$env:TEMP\get-pip.py"
-    Invoke-Download -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
-    $getPipArgs = @("--no-warn-script-location", "--no-index")
-    $bootstrapOk = $false
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
-        Write-Host "pip bootstrap attempt $attempt of 3..."
-        & $pythonExe $getPip @getPipArgs
-        if ($LASTEXITCODE -eq 0) { $bootstrapOk = $true; break }
-        if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
-    }
-    Remove-Item $getPip -Force -ErrorAction SilentlyContinue
-    if (-not $bootstrapOk) { throw "pip bootstrap failed after 3 attempts." }
 }
 if (-not (Test-Path $pythonExe)) { throw "Python install failed — $pythonExe not found." }
 Write-Host "Using Python: $pythonExe"
 
 # ── Download + extract runner package ─────────────────────────────────────────
+# Must happen before pip bootstrap so runner/vendor/ wheels are available.
 Write-Host "Downloading runner package..."
 $zipPath = "$env:TEMP\onboarding-runner.zip"
 Invoke-Download -Uri $RunnerPackageUrl -OutFile $zipPath
 Expand-Archive -Path $zipPath -DestinationPath $installPath -Force
 Remove-Item $zipPath
 
-# ── Write .env ─────────────────────────────────────────────────────────────────
-@"
-ANTHROPIC_API_KEY=$AnthropicApiKey
-WORKER_API_URL=$ApiUrl
-WORKER_DEVICE_KEY=$DeviceApiKey
-WORKER_POLL_INTERVAL=5
-RUNNER_MAX_STEPS=20
-RUNNER_SCREENSHOT_SCALE=0.75
-RUNNER_STEP_DELAY_MS=800
-LOG_LEVEL=INFO
-SLACK_WEBHOOK=$SlackWebhook
-"@ | Set-Content "$installPath\runner\.env" -Encoding UTF8
+# ── Bootstrap pip from bundled wheel (no network needed) ──────────────────────
+# get-pip.py hits pypi.org/simple/pip/ at the TCP level — blocked on this machine.
+# A .whl file is just a zip; expanding it into site-packages installs pip directly.
+$vendorDir    = "$installPath\runner\vendor"
+$sitePackages = "$pythonDir\Lib\site-packages"
+New-Item -ItemType Directory -Force -Path $sitePackages | Out-Null
+$pipWhl = (Get-ChildItem "$vendorDir\pip-*.whl" | Select-Object -First 1).FullName
+if (-not $pipWhl) { throw "pip wheel not found in vendor/. Re-build runner.zip." }
+Write-Host "Installing pip from bundled wheel..."
+# PS5.1 Expand-Archive rejects .whl extension — copy to .zip first.
+$pipZip = "$env:TEMP\pip-install.zip"
+Copy-Item $pipWhl $pipZip -Force
+Expand-Archive -Path $pipZip -DestinationPath $sitePackages -Force
+Remove-Item $pipZip -Force
 
-# ── pip install ────────────────────────────────────────────────────────────────
-Write-Host "Installing Python dependencies..."
+# Pre-install setuptools + wheel so pip can build the .tar.gz source dists
+# (PyAutoGUI and its deps). Installing wheels doesn't need a build backend,
+# so this works even though setuptools isn't in site-packages yet.
+Write-Host "Pre-installing build tools..."
+& $pythonExe -m pip install setuptools wheel `
+    --no-index --find-links $vendorDir `
+    --no-warn-script-location
+if ($LASTEXITCODE -ne 0) { throw "Failed to pre-install setuptools/wheel." }
+
+# ── Write .env ─────────────────────────────────────────────────────────────────
+$envContent = "ANTHROPIC_API_KEY=$AnthropicApiKey`nWORKER_API_URL=$ApiUrl`nWORKER_DEVICE_KEY=$DeviceApiKey`nWORKER_POLL_INTERVAL=5`nRUNNER_MAX_STEPS=20`nRUNNER_SCREENSHOT_SCALE=0.75`nRUNNER_STEP_DELAY_MS=800`nLOG_LEVEL=INFO`nSLACK_WEBHOOK=$SlackWebhook`n"
+# Write without BOM — PS5.1 Set-Content -Encoding UTF8 adds a BOM which dotenv reads as part of the first key name.
+[System.IO.File]::WriteAllText("$installPath\runner\.env", $envContent, [System.Text.Encoding]::ASCII)
+
+# ── pip install (fully offline via bundled vendor/) ────────────────────────────
+Write-Host "Installing Python dependencies from vendor/..."
 $pipArgs = @(
     "-m", "pip", "install",
     "-r", "$installPath\runner\requirements.txt",
-    "--timeout", "30",
-    "--retries", "1",
-    "--trusted-host", "pypi.org",
-    "--trusted-host", "pypi.python.org",
-    "--trusted-host", "files.pythonhosted.org"
+    "--no-index",
+    "--find-links", $vendorDir,
+    "--no-build-isolation"
 )
 $pipSuccess = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
