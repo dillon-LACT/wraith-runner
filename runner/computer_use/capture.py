@@ -7,15 +7,11 @@ from PIL import Image, ImageGrab
 from config import RUNNER_SCREENSHOT_SCALE
 
 
-def focus_primary(title_fragment: str) -> None:
-    """Find a window by title and move it to the primary monitor using Win32 API."""
+def _find_window(title_fragment: str):
     import ctypes
     import ctypes.wintypes
-    import logging
-    _log = logging.getLogger(__name__)
 
     user32 = ctypes.windll.user32
-
     found = []
 
     def _cb(hwnd, _):
@@ -29,12 +25,41 @@ def focus_primary(title_fragment: str) -> None:
 
     WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
     user32.EnumWindows(WNDENUMPROC(_cb), 0)
+    return found[0] if found else None
 
-    if not found:
-        _log.warning(f"focus_primary: no window found matching '{title_fragment}'")
-        return
 
-    hwnd = found[0]
+def focus_primary(title_fragment: str, timeout: float = 12.0) -> bool:
+    """Find a window by title (polling until it exists) and force it to the
+    foreground on the primary monitor. Returns True if the window was found
+    and focused, False on timeout.
+
+    Uses AttachThreadInput because a plain SetForegroundWindow call from a
+    background/automated process is silently ignored by Windows' foreground-
+    lock restriction — the target window can stay unfocused indefinitely even
+    though it renders on top, so clicks/keys can still be swallowed by
+    whichever window last held real input focus (e.g. our own console).
+    """
+    import ctypes
+    import ctypes.wintypes
+    import time
+    import logging
+    _log = logging.getLogger(__name__)
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    deadline = time.monotonic() + timeout
+    hwnd = None
+    while time.monotonic() < deadline:
+        hwnd = _find_window(title_fragment)
+        if hwnd:
+            break
+        time.sleep(0.3)
+
+    if not hwnd:
+        _log.warning(f"focus_primary: no window found matching '{title_fragment}' after {timeout}s")
+        return False
+
     rect = ctypes.wintypes.RECT()
     user32.GetWindowRect(hwnd, ctypes.byref(rect))
     w = rect.right - rect.left
@@ -42,8 +67,22 @@ def focus_primary(title_fragment: str) -> None:
 
     SWP_NOZORDER = 0x0004
     user32.SetWindowPos(hwnd, None, 0, 0, w, h, SWP_NOZORDER)
+
+    fg_hwnd = user32.GetForegroundWindow()
+    fg_thread = user32.GetWindowThreadProcessId(fg_hwnd, None)
+    this_thread = kernel32.GetCurrentThreadId()
+    attached = False
+    if fg_thread and fg_thread != this_thread:
+        attached = bool(user32.AttachThreadInput(this_thread, fg_thread, True))
+
+    user32.BringWindowToTop(hwnd)
     user32.SetForegroundWindow(hwnd)
+
+    if attached:
+        user32.AttachThreadInput(this_thread, fg_thread, False)
+
     _log.info(f"focus_primary: moved '{title_fragment}' window to (0,0) size={w}x{h}")
+    return True
 
 
 def capture_screenshot() -> tuple[str, int, int]:

@@ -164,8 +164,8 @@ Write-Host "──────────────────────�
 $allSuccess = $true
 foreach ($app in $appList) {
     $r = $results[$app]
-    $status = $r.result_status ?? $r.status ?? "unknown"
-    $detail = $r.result_detail ?? ""
+    $status = if ($r.result_status) { $r.result_status } elseif ($r.status) { $r.status } else { "unknown" }
+    $detail = if ($r.result_detail) { $r.result_detail } else { "" }
     $icon = if ($status -eq "success") { "✓" } else { "✗" }
     Write-Host "$icon  $app — $status  $detail"
     if ($status -ne "success") { $allSuccess = $false }

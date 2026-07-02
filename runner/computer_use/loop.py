@@ -10,6 +10,8 @@ from apps.base import AppProfile
 from computer_use.capture import capture_screenshot, focus_primary
 from computer_use.executor import execute_action
 from config import ANTHROPIC_API_KEY, CU_BETA, CU_MODEL, CU_TOOL_TYPE, RUNNER_MAX_STEPS, RUNNER_STEP_DELAY_MS
+
+_CACHE_BETA = "prompt-caching-2024-07-31"
 from job import AuthMethod, SignInRequest, SignInResult
 
 logger = logging.getLogger(__name__)
@@ -136,8 +138,7 @@ def run_signin_loop(profile: AppProfile, request: SignInRequest) -> SignInResult
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
         logger.info(f"Launching app: {profile.launch_command}")
-        subprocess.Popen(["pwsh", "-Command", profile.launch_command])
-        time.sleep(3)
+        subprocess.Popen(["powershell", "-Command", profile.launch_command])
 
     focus_primary(profile.name)
     time.sleep(1)
@@ -176,10 +177,10 @@ def run_signin_loop(profile: AppProfile, request: SignInRequest) -> SignInResult
         response = _client.beta.messages.create(
             model=CU_MODEL,
             max_tokens=4096,
-            system=system_prompt,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
             tools=[computer_tool],
             messages=messages,
-            betas=[CU_BETA],
+            betas=[CU_BETA, _CACHE_BETA],
         )
 
         messages.append({"role": "assistant", "content": response.content})
@@ -215,8 +216,6 @@ def run_signin_loop(profile: AppProfile, request: SignInRequest) -> SignInResult
             logger.info(f"Action: {action_type} {action}")
 
             if action_type == "screenshot":
-                focus_primary(profile.name)
-                time.sleep(0.5)
                 ss, w, h = capture_screenshot()
                 final_screenshot = ss
                 tool_results.append({

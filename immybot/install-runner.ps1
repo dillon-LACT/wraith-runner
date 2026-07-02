@@ -141,42 +141,52 @@ if (-not $pipSuccess) {
     exit 1
 }
 
-# ── NSSM ───────────────────────────────────────────────────────────────────────
-if (-not (Test-Path $nssmPath)) {
-    Write-Host "Downloading NSSM..."
-    $nssmZip = "$env:TEMP\nssm.zip"
-    Invoke-Download -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $nssmZip
-    Expand-Archive -Path $nssmZip -DestinationPath "$env:TEMP\nssm-extract" -Force
-    New-Item -ItemType Directory -Force -Path "C:\ProgramData\nssm" | Out-Null
-    Copy-Item "$env:TEMP\nssm-extract\nssm-2.24\win64\nssm.exe" $nssmPath
-    Remove-Item $nssmZip -Force
-    Remove-Item "$env:TEMP\nssm-extract" -Recurse -Force
-}
-
-# ── Remove existing service ────────────────────────────────────────────────────
+# ── Remove legacy NSSM service, if migrating an older install ─────────────────
+# NSSM ran worker.py as SYSTEM in Session 0, where screen capture / mouse and
+# keyboard automation don't work. A Scheduled Task running as the interactive
+# logged-on user (below) replaces it. python.exe (vs pythonw.exe) also used to
+# spawn a visible console window that could steal foreground focus from the
+# target app and swallow its clicks/keystrokes — pythonw.exe has no console.
 $existingSvc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingSvc) {
-    Write-Host "Removing existing service..."
-    & $nssmPath stop   $ServiceName confirm 2>$null
-    & $nssmPath remove $ServiceName confirm
+    Write-Host "Removing legacy NSSM service..."
+    if (Test-Path $nssmPath) {
+        & $nssmPath stop   $ServiceName confirm 2>$null
+        & $nssmPath remove $ServiceName confirm
+    } else {
+        sc.exe delete $ServiceName | Out-Null
+    }
 }
 
-# ── Register + start service ───────────────────────────────────────────────────
-& $nssmPath install $ServiceName $pythonExe "worker.py"
-& $nssmPath set     $ServiceName AppDirectory   "$installPath\runner"
-& $nssmPath set     $ServiceName DisplayName    "Onboarding Runner"
-& $nssmPath set     $ServiceName Description    "AI-powered app sign-in automation worker"
-& $nssmPath set     $ServiceName Start          SERVICE_AUTO_START
-& $nssmPath set     $ServiceName AppStdout      "$installPath\logs\service.log"
-& $nssmPath set     $ServiceName AppStderr      "$installPath\logs\service.log"
-& $nssmPath set     $ServiceName AppRotateFiles 1
-& $nssmPath set     $ServiceName AppRotateBytes 5242880
-& $nssmPath start   $ServiceName
+# ── Determine the interactive logged-on user ──────────────────────────────────
+$activeSession = quser 2>$null | Select-Object -Skip 1 | ForEach-Object {
+    $parts = ($_ -replace '^\s*>', '') -split '\s+' | Where-Object { $_ }
+    [PSCustomObject]@{ User = $parts[0]; State = $parts[3] }
+} | Where-Object { $_.State -eq 'Active' } | Select-Object -First 1
+
+if (-not $activeSession) {
+    throw "No active interactive user session found. The runner must be installed while a user is logged on locally (screen capture and input automation require an interactive session)."
+}
+$taskUser = $activeSession.User
+Write-Host "Registering scheduled task to run as interactive user: $taskUser"
+
+# ── Register + start scheduled task (pythonw.exe — no console window) ────────
+$pythonwExe = "$pythonDir\pythonw.exe"
+Unregister-ScheduledTask -TaskName $ServiceName -Confirm:$false -ErrorAction SilentlyContinue
+$action    = New-ScheduledTaskAction -Execute $pythonwExe -Argument "worker.py" -WorkingDirectory "$installPath\runner"
+$trigger   = New-ScheduledTaskTrigger -AtLogOn -User $taskUser
+$principal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType Interactive -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) `
+    -ExecutionTimeLimit (New-TimeSpan -Days 365)
+Register-ScheduledTask -TaskName $ServiceName -Action $action -Trigger $trigger `
+    -Principal $principal -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName $ServiceName
 
 Start-Sleep -Seconds 3
-$svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($svc.Status -ne "Running") {
-    throw "OnboardingRunner failed to start. Check $installPath\logs\service.log"
+$taskState = (Get-ScheduledTask -TaskName $ServiceName).State
+if ($taskState -ne "Running") {
+    throw "OnboardingRunner scheduled task failed to start (state=$taskState). Check $installPath\logs\service.log"
 }
 
 # ── Write version to registry for ImmyBot detection ───────────────────────────

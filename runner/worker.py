@@ -1,3 +1,12 @@
+import ctypes
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 import logging
 import os
 import sys
@@ -13,7 +22,16 @@ from config import LOG_LEVEL, WORKER_API_URL, WORKER_DEVICE_KEY, WORKER_POLL_INT
 from job import AuthMethod, SignInRequest
 import slack
 
-logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs", "service.log")
+os.makedirs(os.path.dirname(_log_file), exist_ok=True)
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(_log_file, encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 _headers = {"X-API-Key": WORKER_DEVICE_KEY}
@@ -52,7 +70,13 @@ def poll_once() -> None:
         slack_webhook=job.get("slack_webhook"),
     )
 
-    result = run_signin_loop(profile, request)
+    try:
+        result = run_signin_loop(profile, request)
+    except Exception as e:
+        logger.exception(f"Job {job_id} crashed during run_signin_loop")
+        _post_result(job_id, "failed_safely", f"Runner error: {e}")
+        return
+
     slack.post_result(request, result)
     _post_result(job_id, result.status, result.detail)
 

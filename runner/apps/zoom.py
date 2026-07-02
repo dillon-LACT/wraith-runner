@@ -44,15 +44,36 @@ If Zoom shows a "You previously signed in as [email]" screen with an arrow (→)
   - If the displayed email matches the target user, click the arrow (→) button. Then wait 4 seconds, take a screenshot, and check if the home screen appeared. If yes, report success.
   - If the displayed email does NOT match the target user, click "Sign into a different account" and proceed with the sign-in flow below.
 
+GENERAL RULE FOR THIS APP: mouse clicks on BUTTONS (Sign In, Next, etc.) do not reliably
+register in this Zoom build — do not rely on them and do not waste time repeating a failed
+click. Mouse clicks DO work for focusing TEXT FIELDS (email, password). So: click into text
+fields normally, but activate buttons with Tab + Return instead of clicking them.
+
+To activate any button with keyboard navigation:
+  1. Press Tab once.
+  2. Take a screenshot immediately and confirm a blue focus border now surrounds the intended
+     button. If no border appeared, press Tab again (up to 3 times) and re-check with a
+     screenshot each time before proceeding — do not press Return until you can see the border.
+  3. Only once the correct button shows the focus border, press Return/Enter to activate it.
+
 If a sign-in screen is shown:
-  1. Click "Sign In".
-  2. Enter the username in the email field.
-  3. Tab to the password field (or click it), then enter the password.
-  4. Click the "Sign In" button.
+  1. Activate "Sign In" using the Tab+Return procedure above (do not mouse-click it).
+  2. An email entry form appears with an "Email or phone number" field and a "Next" button.
+     Click the email field, type the username, then activate "Next" using Tab+Return (do not
+     mouse-click Next).
+  3. IMPORTANT — the next screen shows a PASSWORD screen, not the email screen.
+     It will display the email address at the TOP as static (non-editable) text — do NOT click it or type into it.
+     Below the email there will be a "Password" input field. Click that password field and type the password.
+  4. IMPORTANT — submit the password by pressing Return/Enter IMMEDIATELY after typing it,
+     while the cursor is STILL inside the password field. Do NOT press Tab first and do NOT
+     click the "Sign In" button — tabbing away from the password field before submitting has been
+     observed to leave the button focused (visible blue border) but non-responsive to Return.
+     Pressing Enter directly in the password field reliably submits the form.
   5. Wait 5 seconds, then take a screenshot.
   6. If the home screen is visible, report success immediately — do NOT click anything else.
 
-IMPORTANT: After clicking Sign In, do not press alt+Tab, do not look for a browser, do not click anything until you have taken a screenshot and assessed the result. Zoom user/password sign-in does not open a browser.
+IMPORTANT: After entering email and activating Next, you are on the PASSWORD screen even if the email is still shown at the top. The email shown at the top is read-only. Your next action must be to click the Password field and type the password. Do not activate Next again.
+Zoom user/password sign-in does not open a browser.
 
 The Zoom AI panel on the right side of the screen saying "Sign in to start asking questions" does NOT mean you are signed out — ignore it completely. Only look at the LEFT side of the screen for the main Zoom navigation (Home, Chat, Phone tabs).
 
