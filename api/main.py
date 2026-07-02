@@ -82,6 +82,15 @@ def create_device_key(body: CreateKeyRequest, _=Depends(auth.require_admin)):
     return {"api_key": key, "device_id": body.device_id}
 
 
+@app.delete("/admin/api-keys/{key}")
+def revoke_api_key(key: str, _=Depends(auth.require_admin)):
+    with database.get_conn() as conn:
+        result = conn.execute("DELETE FROM api_keys WHERE key=?", (key,))
+        if result.rowcount == 0:
+            raise HTTPException(404, "Key not found")
+    return {"revoked": key}
+
+
 # ---------- tenant (job submission) ----------
 
 @app.post("/jobs", status_code=201)
